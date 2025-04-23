@@ -1,0 +1,3 @@
+module ImageConverter {
+	requires java.desktop;
+}

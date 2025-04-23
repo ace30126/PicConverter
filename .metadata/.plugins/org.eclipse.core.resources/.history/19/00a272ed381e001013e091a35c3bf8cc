@@ -1,0 +1,211 @@
+package imgconv;
+
+import javax.imageio.ImageIO;
+import java.awt.dnd.DnDConstants;
+import javax.swing.*;
+import javax.swing.border.TitledBorder;
+import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetAdapter;
+import java.awt.dnd.DropTargetDropEvent;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+
+public class ImageConverter extends JFrame {
+
+    private JRadioButton pngButton;
+    private JRadioButton jpgButton;
+    private JRadioButton icoButton;
+    private JTextArea logTextArea;
+    private JButton selectButton;
+    private JButton infoButton;
+    private File[] selectedFiles;
+
+    public ImageConverter() {
+        setTitle("이미지 변환기");
+        setSize(400, 300);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setResizable(false);
+        // 배경 그라데이션 패널
+        JPanel backgroundPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g;
+                Color colorStart = new Color(135, 206, 235); // 하늘색
+                Color colorEnd = Color.WHITE;
+                GradientPaint gradient = new GradientPaint(0, 0, colorStart, getWidth(), 0, colorEnd);
+                g2d.setPaint(gradient);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                super.paintComponent(g);
+            }
+        };
+        backgroundPanel.setLayout(new BorderLayout());
+
+        // 확장자 선택 버튼 그룹
+        JPanel formatPanel = new JPanel();
+        formatPanel.setBorder(new TitledBorder("변환할 확장자"));
+        pngButton = new JRadioButton("to PNG");
+        jpgButton = new JRadioButton("to JPEG");
+        icoButton = new JRadioButton("to ICO (준비 중)"); // ICO 변환은 추가 작업이 필요함을 알림
+        icoButton.setEnabled(false); // 일단 비활성화
+        ButtonGroup buttonGroup = new ButtonGroup();
+        buttonGroup.add(pngButton);
+        buttonGroup.add(jpgButton);
+        buttonGroup.add(icoButton);
+        formatPanel.add(pngButton);
+        formatPanel.add(jpgButton);
+        formatPanel.add(icoButton);
+
+        // 로그 기록 영역
+        logTextArea = new JTextArea();
+        logTextArea.setEditable(false);
+        JScrollPane logScrollPane = new JScrollPane(logTextArea);
+
+
+
+        // 아이콘 설정
+        try {
+            setIconImage(ImageIO.read(new File("icon.png")));
+        } catch (IOException e) {
+            logTextArea.append("아이콘 파일(icon.png)을 찾을 수 없습니다.\n");
+        }
+
+        
+        // 파일 선택 및 정보 버튼
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        selectButton = new JButton("사진 선택");
+        infoButton = new JButton("?");
+        buttonPanel.add(selectButton);
+        buttonPanel.add(infoButton);
+
+        // 드래그 앤 드롭 기능
+        setDropTarget(new DropTarget(this, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
+            @Override
+            public void drop(DropTargetDropEvent event) {
+                event.acceptDrop(DnDConstants.ACTION_COPY);
+                Transferable transferable = event.getTransferable();
+                DataFlavor[] flavors = transferable.getTransferDataFlavors();
+                for (DataFlavor flavor : flavors) {
+                    if (flavor.isFlavorJavaFileListType()) {
+                        try {
+                            List<File> files = (List<File>) transferable.getTransferData(flavor);
+                            selectedFiles = files.toArray(new File[0]);
+                            convertImages();
+                        } catch (Exception e) {
+                            logTextArea.append("파일 드롭 중 오류가 발생했습니다: " + e.getMessage() + "\n");
+                        }
+                        return;
+                    }
+                }
+                event.dropComplete(false);
+            }
+        }));
+
+        // 파일 선택 버튼 액션 리스너
+        selectButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setMultiSelectionEnabled(true);
+                int result = fileChooser.showOpenDialog(ImageConverter.this);
+                if (result == JFileChooser.APPROVE_OPTION) {
+                    selectedFiles = fileChooser.getSelectedFiles();
+                    convertImages();
+                }
+            }
+        });
+
+        // 정보 버튼 액션 리스너
+        infoButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new java.net.URI("https://tutoreducto.tistory.com/"));
+                } catch (IOException | java.net.URISyntaxException ex) {
+                    logTextArea.append("홈페이지를 열 수 없습니다: " + ex.getMessage() + "\n");
+                }
+            }
+        });
+
+        backgroundPanel.add(formatPanel, BorderLayout.NORTH);
+        backgroundPanel.add(logScrollPane, BorderLayout.CENTER);
+        backgroundPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        add(backgroundPanel);
+        setVisible(true);
+    }
+
+    private void convertImages() {
+        if (selectedFiles == null || selectedFiles.length == 0) {
+            logTextArea.append("선택된 파일이 없습니다.\n");
+            return;
+        }
+
+        String targetFormat = null;
+        if (pngButton.isSelected()) {
+            targetFormat = "png";
+        } else if (jpgButton.isSelected()) {
+            targetFormat = "jpg";
+        } else if (icoButton.isSelected()) {
+            targetFormat = "ico";
+        } else {
+            logTextArea.append("변환할 확장자를 선택해주세요.\n");
+            return;
+        }
+
+        for (File file : selectedFiles) {
+            String fileName = file.getName();
+            String fileExtension = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
+
+            if (!fileExtension.equals("jpg") && !fileExtension.equals("jpeg") &&
+                !fileExtension.equals("png") && !fileExtension.equals("h264") && !fileExtension.equals("ico")) {
+                logTextArea.append(fileName + ": 변환 불가, jpg, png, H264, ico만 가능합니다.\n");
+                continue; // 다음 파일로 넘어감
+            }
+
+            try {
+                BufferedImage originalImage = ImageIO.read(file);
+                if (originalImage == null && !fileExtension.equals("h264")) { // H264는 이미지가 아닐 수 있음
+                    logTextArea.append("파일을 이미지로 읽을 수 없습니다: " + fileName + "\n");
+                    continue;
+                }
+
+                String originalName = fileName.substring(0, fileName.lastIndexOf("."));
+                File outputFile = new File(file.getParent(), originalName + "_conv." + targetFormat);
+
+                // H264는 이미지IO로 처리할 수 없으므로 별도 처리 (일단 로그만 남김)
+                if (fileExtension.equals("h264")) {
+                    logTextArea.append(fileName + " -> " + outputFile.getName() + ": H264 파일은 이미지 변환을 지원하지 않습니다.\n");
+                    continue;
+                }
+
+                // ICO 변환은 별도 라이브러리 필요 (일단 로그만 남김)
+                if (targetFormat.equals("ico")) {
+                    logTextArea.append(fileName + " -> " + outputFile.getName() + ": ICO 변환 기능은 아직 준비 중입니다.\n");
+                    continue;
+                }
+
+                ImageIO.write(originalImage, targetFormat, outputFile);
+                logTextArea.append(fileName + " -> " + outputFile.getName() + " 변환 완료\n");
+
+            } catch (IOException e) {
+                logTextArea.append("이미지 변환 중 오류가 발생했습니다: " + fileName + " - " + e.getMessage() + "\n");
+            } catch (IllegalArgumentException e) {
+                logTextArea.append("지원하지 않는 이미지 형식입니다: " + fileName + " - " + e.getMessage() + "\n");
+            }
+        }
+        logTextArea.setCaretPosition(logTextArea.getDocument().getLength());
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(ImageConverter::new);
+    }
+}
